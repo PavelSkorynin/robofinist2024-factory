@@ -1,0 +1,411 @@
+folder "prjs" "Robofinist2024"
+
+import "RSCMotorA"
+import "RSCMotorB"
+import "RSCLight2"
+import "RSCLight3"
+import "RSCPD1"
+import "RSCLine"
+import "RSCGrid"
+
+import "Colors"
+import "Move"
+import "Lift"
+import "Legenda"
+import "TubeState"
+
+Init()
+
+TubeThreshold = 40
+posX = 1
+posY = 2
+dir = RSCGrid.Direction_Left
+tubesDone = 0
+
+hTubes = Row.Init(9, TubeState.Unknown)
+
+While Row.Read(hTubes, 0) <> TubeState.NoTube
+  MoveToNextTube()
+  GrabTube(color)
+  If color <> Colors.NoColor Then
+    FindShelf(color, shelf)
+    If shelf = 0 Then
+      MoveToShare()
+      Share()
+    Else
+      MoveToShelf(shelf)
+      Unload(shelf)
+    EndIf
+  EndIf
+EndWhile
+
+If tubesDone = 4 Then
+  Program.End()
+EndIf
+
+redCount = 0
+
+max = (4 - tubesDone)
+For i = 1 To max
+  MoveToBlueShare()
+  GrabBlueShare()
+  FindShelf(Colors.Blue, shelf)
+  MoveToShelf(shelf)
+  Unload(shelf)  
+  redCount += 1
+EndFor
+
+Move.Stop()
+Program.End()
+
+' Инициализируем устройства и алгоритмы
+Function Init()
+  Sensor.SetMode(4, 0)
+  
+  RSCLine.Init()
+  RSCGrid.Init(4, 3)
+  Colors.Init()
+  Lift.Init()
+  TubeState.Init()
+  
+  RSCGrid.SetUnavailable(1, 0, RSCGrid.Direction_Right)
+  RSCGrid.SetUnavailable(3, 0, RSCGrid.Direction_Left)
+  RSCGrid.SetUnavailable(2, 1, RSCGrid.Direction_Down)
+  
+  RSCPD1.kP = 0.4
+  RSCPD1.kD = 1.6
+  
+  RSCLight2.Min = 10
+  RSCLight3.Min = 10
+  RSCLight2.Max = 70
+  RSCLight3.Max = 60
+    
+  MotorA.IsMedium()
+  MotorB.IsMedium()
+  RSCMotorA.SetDirectPolarity()
+  RSCMotorB.SetReversPolarity()
+  
+  MotorC.StartPower(0)
+  MotorD.StartPower(0)
+  
+  RSCLine.power = 70
+  RSCLine.turnPower = 25
+EndFunction
+
+' Проезд к следующей трубе
+Function MoveToNextTube()
+  lastTubeOrUnknown = 0
+  For i = 0 To 8 
+    state = Row.Read(@hTubes, i)
+    If state = TubeState.Unknown Or state = TubeState.Tube Then
+      lastTubeOrUnknown = i
+    EndIf
+  EndFor
+  
+  toX = 1
+  toY = Math.Floor(lastTubeOrUnknown / 3)
+  
+  RSCGrid.FindPath(@posX, @posY, @dir, toX, toY, actions, numberOfActions, toDir)
+  MoveByPath(actions, numberOfActions)
+  @posX = toX
+  @posY = toY
+  @dir = toDir
+  
+  If toDir = RSCGrid.Direction_Up Then
+    RSCLine.TurnLeftToLine(150, 1)
+  ElseIf toDir = RSCGrid.Direction_Down Then
+    RSCLine.TurnRightToLine(150, 1)
+  ElseIf toDir = RSCGrid.Direction_Right Then
+    RSCLine.TurnRightToLine(450, 1)
+  EndIf
+  
+  Lift.WaitIsReady()
+  
+  RSCLine.MoveBy(500)
+  RSCLine.MoveToCross()
+  Move.Stop()
+  Program.Delay(100)  
+EndFunction
+
+' Захват трубы. Функция возвращает цвет трубы
+Function GrabTube(out number color)
+  Lift.OpenGrab()
+
+  Move.RightAndStop(RSCLine.turnPower, 200)
+  Program.Delay(500)
+  
+  ' поворачиваемся налево, пока не встретим банку  
+  Motor.StartSync("AB", 25, 25)
+  'RSCMotorA.SetPowerNow(60)
+  'RSCMotorB.SetPowerNow(-60)
+  
+  RSCMotorA.GetEncoder(encoderA)
+  startEncoderA = encoderA
+  RSCMotorB.GetEncoder(encoderB)
+  startEncoderB = encoderB
+  rotateEncoder = 0
+  While rotateEncoder < 300 And Sensor4.Raw1() > @TubeThreshold
+    RSCMotorA.GetEncoder(encoderA)
+    RSCMotorB.GetEncoder(encoderB)
+    rotateEncoder = (Math.Abs(encoderA - startEncoderA) + Math.Abs(encoderB - startEncoderB)) / 2
+  EndWhile
+  
+  color = Colors.NoColor
+  ' обнуляем все банки на этом направлении
+  index = @posY * 3
+  For dI = 0 To 2
+    Row.Write(@hTubes, index + dI, TubeState.NoTube)
+  EndFor
+
+  ' нашли банку
+  If rotateEncoder < 300 Then
+    end = rotateEncoder + 60
+    While rotateEncoder < end
+      RSCMotorA.GetEncoder(encoderA)
+      RSCMotorB.GetEncoder(encoderB)
+      rotateEncoder = (Math.Abs(encoderA - startEncoderA) + Math.Abs(encoderB - startEncoderB)) / 2
+    EndWhile
+
+    'Program.Delay(100)
+    Move.Stop()
+    Program.Delay(500)
+    
+    RSCMotorA.GetEncoder(encoderA)
+    RSCMotorB.GetEncoder(encoderB)
+    
+    Move.Forward(40, 280)
+    Lift.CloseGrab()
+    Program.Delay(200)
+    
+    RSCMotorA.GetEncoder(encoderA2)
+    RSCMotorB.GetEncoder(encoderB2)
+    distance = (Math.Abs(encoderA2 - encoderA) + Math.Abs(encoderB2 - encoderB)) / 2
+    
+    Move.BackwardAndStop(40, distance)
+    
+    ' определяем цвет банки
+    attempt = 0
+    While attempt < 5 And color = Colors.NoColor
+      Colors.ReadColor(500, color)
+      LCD.Write(0, 20, color)
+      attempt += 1
+    EndWhile
+
+    ' сканируем оставшиеся банки
+    RSCMotorA.GetEncoder(encoderA)
+    startEncoderA = encoderA
+    RSCMotorB.GetEncoder(encoderB)
+    startEncoderB = encoderB
+    encoder = 0
+    Motor.StartSync("AB", 25, 25)
+    While encoder < 300 - rotateEncoder
+      RSCMotorA.GetEncoder(encoderA)
+      RSCMotorB.GetEncoder(encoderB)
+      encoder = (Math.Abs(encoderA - startEncoderA) + Math.Abs(encoderB - startEncoderB)) / 2
+      If Sensor4.Raw1() < @TubeThreshold Then
+        tubeIndex = 0
+        If encoder + rotateEncoder < 200 Then
+          tubeIndex = 1
+        EndIf
+        Row.Write(@hTubes, index + tubeIndex, TubeState.Tube)
+      EndIf
+    EndWhile
+  EndIf
+  
+  @posX = 0
+  RSCLine.TurnLeftToLine(125, 1)
+  @dir = RSCGrid.Direction_Right
+EndFunction
+
+' Поиск подходящей по цвету полки
+Function FindShelf(in number color, out number shelf)
+  If color = Colors.Blue Then
+    If @tubesDone = 0 Then
+      shelf = 6
+    ElseIf @tubesDone = 1 Then
+      shelf = 7
+    ElseIf @tubesDone = 2 Then
+      shelf = 3
+    Else
+      shelf = 4
+    EndIf
+  Else
+    shelf = 0
+  EndIf
+EndFunction
+
+' Проезд к полке
+Function MoveToShelf(in number shelf)
+  y = Math.Remainder(shelf, 3)
+  level = Math.Floor(shelf / 3)
+  
+  If level = 0 Then
+    Lift.LiftToLow()
+  ElseIf level = 1 Then
+    Lift.LiftToMedium()
+  ElseIf level = 2 Then
+    Lift.LiftToHigh()
+  EndIf
+  
+  RSCGrid.FindPath(@posX, @posY, @dir, 3, y, actions, numberOfActions, toDir)
+  MoveByPath(actions, numberOfActions)
+  @posX = 3
+  @posY = y
+  
+  Move.Stop()
+  Time.Reset2()
+  Lift.WaitIsReady()
+  t = Time.Get2()
+  If t < 1000 Then
+    Program.Delay(1000 - t)
+  EndIf
+  
+  If toDir = RSCGrid.Direction_Up Then
+    RSCLine.TurnRightToLine(150, 1)
+  ElseIf toDir = RSCGrid.Direction_Down Then
+    RSCLine.TurnLeftToLine(150, 1)
+  ElseIf toDir = RSCGrid.Direction_Left Then
+    RSCLine.TurnLeftToLine(400, 1)
+  EndIf
+  
+  @dir = RSCGrid.Direction_Right    
+EndFunction
+
+' Выгрузка трубы на полку
+Function Unload(in number shelf)
+  If shelf >= 3 And shelf <= 5 Then
+    RSCLine.MoveBy(500)
+  Else
+    RSCLine.MoveBy(700)
+  EndIf
+  Move.Stop()
+  Program.Delay(400)
+  Lift.OpenGrab()
+  Program.Delay(200)
+  Move.Backward(RSCLine.power * 0.6, 100)
+  Move.Backward(RSCLine.power * 0.3, 100)
+  Move.Stop()
+  Program.Delay(1500)  
+  RSCLine.TurnLeftToLine(350, 1)
+  Lift.LiftToGround()
+  RSCLine.MoveBy(200)
+  RSCLine.MoveToCross()
+  RSCLine.MoveBy(100)
+  Move.Stop()
+  Program.Delay(100)
+  @dir = RSCGrid.Direction_Left
+  @tubesDone += 1
+EndFunction
+
+Function MoveToShare()
+  Lift.LiftToLow()
+  
+  RSCGrid.FindPath(@posX, @posY, @dir, 1, 1, actions, numberOfActions, toDir)
+  MoveByPath(actions, numberOfActions)
+  @posX = 1
+  @posY = 1
+  
+  Move.Stop()
+  Time.Reset2()
+  Lift.WaitIsReady()
+  t = Time.Get2()
+  If t < 1000 Then
+    Program.Delay(1000 - t)
+  EndIf
+  
+  If toDir = RSCGrid.Direction_Up Then
+    RSCLine.TurnLeftToLine(400, 1)
+  ElseIf toDir = RSCGrid.Direction_Right Then
+    RSCLine.TurnRightToLine(150, 1)
+  ElseIf toDir = RSCGrid.Direction_Left Then
+    RSCLine.TurnLeftToLine(150, 1)
+  EndIf
+  
+  @dir = RSCGrid.Direction_Down    
+EndFunction
+
+Function Share()
+  RSCLine.MoveBy(500)
+  RSCLine.MoveToCross()
+  Move.Stop()
+  Program.Delay(500)
+  Move.ForwardAndStop(50, 300)
+  Lift.LiftToGround()
+  Lift.WaitIsReady()
+  Lift.OpenGrab()
+  Program.Delay(500)
+  Move.BackwardAndStop(50, 270)
+  Program.Delay(1000)
+  
+  @posY = 0
+EndFunction
+
+Function MoveToBlueShare()
+  Lift.LiftToGround()
+  
+  RSCGrid.FindPath(@posX, @posY, @dir, 2, 1, actions, numberOfActions, toDir)
+  MoveByPath(actions, numberOfActions)
+  @posX = 2
+  @posY = 1
+  
+  Move.Stop()
+  Time.Reset2()
+  Lift.WaitIsReady()
+  t = Time.Get2()
+  If t < 1000 Then
+    Program.Delay(1000 - t)
+  EndIf
+  
+  If toDir = RSCGrid.Direction_Up Then
+    RSCLine.TurnLeftToLine(400, 1)
+  ElseIf toDir = RSCGrid.Direction_Right Then
+    RSCLine.TurnRightToLine(150, 1)
+  ElseIf toDir = RSCGrid.Direction_Left Then
+    RSCLine.TurnLeftToLine(150, 1)
+  EndIf
+  
+  @dir = RSCGrid.Direction_Down    
+EndFunction
+
+Function GrabBlueShare()
+  Lift.OpenGrab()
+  RSCLine.MoveBy(500)
+  RSCLine.MoveToCross()
+  Move.Stop()
+  Program.Delay(500)
+  Move.ForwardAndStop(50, 200 + @redCount * 100)
+  Lift.CloseGrab()
+  Program.Delay(500)
+  Move.BackwardAndStop(50, 100 + @redCount * 100)
+  Program.Delay(1000)
+  
+  @posY = 0
+EndFunction
+
+' Проезд по заданному маршруту
+Function MoveByPath(in number[] actions, in number numberOfActions)
+  For i = 0 To numberOfActions - 1
+    action = actions[i]
+    If action = RSCGrid.Action_Forward Then
+      RSCLine.MoveBy(500)
+      RSCLine.MoveToCross()
+      RSCLine.MoveBy(100)
+      If i < numberOfActions - 1 And actions[i + 1] = RSCGrid.Action_Forward Then
+        RSCLine.MoveBy(150)
+      Else
+        Move.Stop()
+        Program.Delay(300)
+      EndIf
+    ElseIf action = RSCGrid.Action_TurnLeft Then
+      RSCLine.TurnLeftToLine(150, 1)
+      Program.Delay(1000)
+    ElseIf action = RSCGrid.Action_TurnRight Then
+      RSCLine.TurnRightToLine(150, 1)
+      Program.Delay(1000)
+    ElseIf action = RSCGrid.Action_TurnAround Then
+      RSCLine.TurnRightToLine(450, 1)
+      Program.Delay(1000)
+    EndIf
+  EndFor
+  
+EndFunction

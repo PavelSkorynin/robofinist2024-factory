@@ -1,0 +1,30 @@
+Function Init(in number numberOfCandidates)
+  If hVotes <> 0 Then
+    Row.Delete(hVotes)
+  EndIf
+  
+  count = numberOfCandidates
+  hVotes = Row.Init(numberOfCandidates, 0)
+EndFunction
+
+Function Push(in number candidate)
+  Row.Write(hVotes, candidate, Row.Read(hVotes, candidate) + 1)
+EndFunction
+
+Function GetWinner(out number candidate)
+  maxVotes = 0
+  candidate = 0
+  For i = 0 To count - 1
+    votes = Row.Read(hVotes, i)
+    If votes > maxVotes Then
+      maxVotes = votes
+      candidate = i
+    EndIf
+  EndFor
+EndFunction
+
+
+private
+
+number count
+number hVotes

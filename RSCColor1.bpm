@@ -1,0 +1,198 @@
+number MaxR
+number MaxG
+number MaxB
+
+number NoColorSumThreshold
+number GreyThreshold
+number WhiteThreshold
+
+number NoColor
+number BlackColor
+number WhileColor
+
+Function Init()
+  Sensor.SetMode(1, 4) ' RGB mode
+  MaxR = 255
+  MaxG = 255
+  MaxB = 255
+  NoColorSumThreshold = 9
+  GreyThreshold = 0.2
+  WhiteThreshold = 100
+  NoColor = -3
+  BlackColor = -2
+  WhileColor = -1
+EndFunction
+
+Function GetRawValue(out number r, out number g, out number b)
+  Sensor1.Raw3(r, g, b)
+EndFunction
+
+Function GetRGB(out number r, out number g, out number b)
+  Sensor1.Raw3(r, g, b)
+  r *= 255
+  r /= maxR
+  g *= 255
+  g /= maxG
+  b *= 255
+  b /= maxB
+EndFunction
+
+Function GetHSV(out number h, out number s, out number v)
+  r = 0
+  g = 0
+  b = 0
+  Sensor1.Raw3(r, g, b)
+  RGBtoHSV(r, g, b, h, s, v)
+EndFunction
+
+' Возвращает индекс цвета, ближайшего по H компоненте
+' Для белого возвращает WhiteColor
+' Для чёрного возвращает BlackColor
+' Если цвет не обнаружен, возвращает NoColor
+Function GetColor(in number[] colors, in number count, out number color)
+  r = 0
+  g = 0
+  b = 0
+  Sensor1.Raw3(r, g, b)
+  
+  If r + g + b <= NoColorSumThreshold Then
+    color = NoColor
+    Goto GetColorEnd
+  EndIf
+  
+  r_ = r / MaxR
+  g_ = g / MaxG
+  b_ = b / MaxB
+  summ = r_ + g_ + b_
+  r_ /= summ
+  g_ /= summ
+  b_ /= summ
+  
+  ' нет явно выраженной компоненты - перед нами серый цвет
+  If r_ >= GreyThreshold And g_ >= GreyThreshold And b_ >= GreyThreshold Then
+    If summ > WhiteThreshold * 0.5 / 100 Then
+      color = WhileColor
+    Else
+      color = BlackColor
+    EndIf
+    Goto GetColorEnd
+  EndIf
+  
+  RGBtoHSV(r, g, b, h, s, v)
+  
+  minDist = 1000
+  For i = 0 To count - 1
+    colorH = colors[i]
+    dist = h - colorH
+    If dist < 0 Then
+      dist *= -1
+    EndIf
+    If dist > 180 Then
+      dist = 360 - dist
+    EndIf
+    If dist < minDist Then
+      minDist = dist
+      color = i
+    EndIf
+  EndFor
+  GetColorEnd:
+EndFunction
+
+' Распознаёт 6 основных цвета:
+' 0 - нет цвета
+' 1 - чёрный
+' 2 - синий
+' 3 - зелёный
+' 4 - жёлтый
+' 5 - красный
+' 6 - белый
+Function GetColorStandard(out number color)
+  r = 0
+  b = 0
+  g = 0
+  Sensor1.Raw3(r, g, b)
+  
+  summ = r + g + b
+  ' слишком мало цвета
+  If summ <= NoColorSumThreshold Then
+    color = 0
+    Goto GetColorStandardEnd
+  EndIf
+  
+  r_ = r / summ
+  g_ = g / summ
+  b_ = b / summ
+  
+  ' нет явно выраженной компоненты - перед нами серый цвет
+  If r_ >= GreyThreshold And g_ >= GreyThreshold And b_ >= GreyThreshold Then
+    If summ > WhiteThreshold Then
+      color = 6
+    Else
+      color = 1
+    EndIf
+    Goto GetColorStandardEnd
+  EndIf
+  
+  max = Math.Max(Math.Max(r_, g_), b_)
+  color = 0
+  If max = g_ Then
+    If r_ > GreyThreshold Then
+      color = 4
+    Else
+      color = 3
+    EndIf
+  EndIf
+  If max = b_ Then
+    color = 2
+  EndIf
+  If max = r_ Then
+    If g_ > GreyThreshold Then
+      color = 4
+    Else
+      color = 5
+    EndIf
+  EndIf
+  
+  GetColorStandardEnd:
+EndFunction
+
+Function RGBtoHSV(in number r, in number g, in number b, out number h, out number s, out number v)
+  _normR = r / maxR
+  _normG = g / maxG
+  _normB = b / maxB
+  
+  ' Находим максимум и минимум. Не используем встроенные функции для оптимизации
+  max = _normR
+  min = _normR
+  If _normG > max Then
+    max = _normG
+  Else
+    min = _normG
+  EndIf
+  If _normB < min Then
+    min = _normB
+  EndIf
+  If _normB > max Then
+    max = _normB
+  EndIf
+  
+  h = 0
+  If max = min Then
+    h = 0
+  ElseIf max = _normR And _normG >= _normB Then
+    h = 60 * (_normG - _normB) / (max - min)
+  ElseIf max = _normR And _normG < _normB Then
+    h = 60 * (_normG - _normB) / (max - min) + 360
+  ElseIf max = _normG Then
+    h = 60 * (_normB - _normR) / (max - min) + 120
+  ElseIf max = _normB Then
+    h = 60 * (_normR - _normG) / (max - min) + 240
+  EndIf
+  
+  s = 0
+  If max <> 0 Then
+    s = 100 - 100 * min / max
+  EndIf
+  
+  v = max * 100
+EndFunction

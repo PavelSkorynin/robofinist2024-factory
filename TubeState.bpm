@@ -1,0 +1,9 @@
+number Unknown
+number Tube
+number NoTube
+
+Function Init()
+  Unknown = 0
+  Tube = 1
+  NoTube = 2
+EndFunction

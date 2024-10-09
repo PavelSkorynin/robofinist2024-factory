@@ -1,0 +1,74 @@
+import "RSCColor1"
+import "RSCVote"
+
+number Black
+number Blue
+number Green
+number Yellow
+number Red
+number White
+number NoColor
+
+Function Init()
+  Black = 1
+  Blue = 2
+  Green = 3
+  Yellow = 4
+  Red = 5
+  White = 6
+  NoColor = 0
+  
+  RSCColor1.Init()
+  
+  hFile = EV3File.OpenRead("color.dat")
+  RSCColor1.MaxR = EV3File.ConvertToNumber(EV3File.ReadLine(hFile))
+  RSCColor1.MaxG = EV3File.ConvertToNumber(EV3File.ReadLine(hFile))
+  RSCColor1.MaxB = EV3File.ConvertToNumber(EV3File.ReadLine(hFile))
+  For i = 0 To 3
+    colors[i] = EV3File.ConvertToNumber(EV3File.ReadLine(hFile))
+  EndFor
+  EV3File.Close(hFile)
+EndFunction
+
+Function ToString(in number color, out string name)
+  If color = Black Then
+    name = "Black"
+  ElseIf color = Blue Then
+    name = "Blue"
+  ElseIf color = Green Then
+    name = "Green"
+  ElseIf color = Yellow Then
+    name = "Yellow"
+  ElseIf color = Red Then
+    name = "Red"
+  ElseIf color = White Then
+    name = "White"
+  ElseIf color = NoColor Then
+    name = "NoColor"
+  EndIf
+EndFunction
+
+Function ReadColor(in number time, out number color)
+  RSCVote.Init(7)
+  Time.Reset3()
+  
+  While Time.Get3() < time
+    RSCColor1.GetColor(colors, 4, color)
+    If color >= 0 Then
+      color += 2
+    ElseIf color = RSCColor1.WhileColor Then
+      color = White      
+    ElseIf color = RSCColor1.BlackColor Then      
+      color = Black
+    ElseIf color = RSCColor1.NoColor Then
+      color = NoColor
+    EndIf
+    RSCVote.Push(color)
+  EndWhile
+  
+  RSCVote.GetWinner(color)
+EndFunction
+
+private
+
+number[] colors 

@@ -1,0 +1,97 @@
+' motor C - кран
+' motor D - захват
+
+Function Init()
+  MotorC.IsMedium()
+  MotorD.IsMedium()
+  MotorC.SetDirectPolarity()
+  MotorD.SetDirectPolarity()  
+  
+  MotorC.ResetCount()
+  MotorC.StartPower(0)
+  MotorD.StartPower(0)
+  targetLiftEncoder = 0
+  needUpdate = 0
+  lastTimeUpdate = 0
+  Time.Reset1()
+EndFunction
+
+Function Update()
+  If needUpdate = 1 Then
+    now = Time.Get1()
+    enc = MotorC.GetTacho()
+    If enc = lastEncoder Then
+      If now - lastTimeUpdate > 500 Then
+        targetLiftEncoder = enc
+      EndIf
+    Else 
+      lastTimeUpdate = now
+      lastEncoder = enc
+    EndIf
+    
+    If Math.Abs(enc - targetLiftEncoder) > 10 Then
+      power = Math.Min(100, targetLiftEncoder - enc)
+      MotorC.SetPower(power)
+    Else
+      needUpdate = 0
+      MotorC.OffAndBrake()
+    EndIf    
+  EndIf
+EndFunction
+
+Function LiftToGround()
+  needUpdate = 1
+  targetLiftEncoder = 0
+  MotorC.StartPower(0)
+  lastTimeUpdate = 0
+  Time.Reset1()
+EndFunction
+
+Function LiftToLow()
+  needUpdate = 1
+  targetLiftEncoder = -800
+  MotorC.StartPower(0)
+  lastTimeUpdate = 0
+  Time.Reset1()
+EndFunction
+
+Function LiftToMedium()
+  needUpdate = 1
+  targetLiftEncoder = -2900
+  MotorC.StartPower(0)
+  lastTimeUpdate = 0
+  Time.Reset1()
+EndFunction
+
+Function LiftToHigh()
+  needUpdate = 1
+  targetLiftEncoder = -4800
+  MotorC.StartPower(0)
+  lastTimeUpdate = 0
+  Time.Reset1()
+EndFunction
+
+Function IsReady(out number ready)
+  ready = 1 - needUpdate
+EndFunction
+
+Function WaitIsReady()
+  While needUpdate = 1
+    Update()
+  EndWhile
+EndFunction
+
+Function OpenGrab()
+  MotorD.StartPower(80)
+EndFunction
+
+Function CloseGrab()
+  MotorD.StartPower(-80)
+EndFunction
+  
+private
+
+number targetLiftEncoder
+number needUpdate
+number lastEncoder
+number lastTimeUpdate

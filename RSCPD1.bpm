@@ -1,0 +1,18 @@
+' Занимает таймер №4
+' Обновляет ошибку с частотой 50Гц
+number kP
+number kD
+
+number prevError
+
+Function Reset()
+  prevError = 0
+EndFunction
+
+Function Update(in number error, out number power)
+  power = error * kP + (error - prevError) * kD
+  If Time.Get4() >= 20 Then
+    prevError = error
+    Time.Reset4()
+  EndIf
+EndFunction

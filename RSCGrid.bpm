@@ -1,0 +1,156 @@
+number Cols
+number Rows
+
+number Direction_Left
+number Direction_Up
+number Direction_Right
+number Direction_Down
+
+number Action_Forward
+number Action_TurnRight
+number Action_TurnAround
+number Action_TurnLeft
+
+Function Init(in number cols_, in number rows_)
+  ' задаём константы
+  Node_Available = 0
+  Node_Unavailable = 1
+  
+  Direction_Left = 0
+  Direction_Up = 1
+  Direction_Right = 2
+  Direction_Down = 3
+
+  Action_Forward = 0
+  Action_TurnRight = 1
+  Action_TurnAround = 2
+  Action_TurnLeft = 3
+  
+  Cols = cols_
+  Rows = rows_
+  
+  ' Row в 2+ раз быстрее, чем массив []
+  nodes = Row.Init(Cols * Rows * 4, Node_Available)
+EndFunction
+
+Function SetAvailable(in number x, in number y, in number dir)
+  zip(x, y, dir, index)
+  Row.Write(nodes, index, Node_Available)
+EndFunction
+
+Function SetUnavailable(in number x, in number y, in number dir)
+  zip(x, y, dir, index)
+  Row.Write(nodes, index, Node_Unavailable)
+EndFunction
+
+Function FindPath(in number fromX, in number fromY, in number fromDir, in number toX, in number toY, out number[] actions, out number numberOfActions, out number toDir)
+  If fromX = toX And fromY = toY Then
+    numberOfActions = 0
+    toDir = fromDir
+    Goto FindPathReturn
+  EndIf
+  
+  qSize = Rows * Cols * 4
+  dx[0] = -1
+  dx[1] = 0
+  dx[2] = 1
+  dx[3] = 0
+  dy[0] = 0
+  dy[1] = 1
+  dy[2] = 0
+  dy[3] = -1
+  
+  dists = Row.Init(Rows * Cols * 4, -1)
+  revActions = Row.Init(Rows * Cols * 4, -1)
+  prevNodes = Row.Init(Rows * Cols * 4, -1)
+  queue = Row.Init(qSize, -1)
+  
+  qFrom = 0
+  qEnd = 1
+    
+  zip(fromX, fromY, fromDir, fromIndex)
+  
+  Row.Write(dists, fromIndex, 0)
+  Row.Write(queue, 0, fromIndex)
+  While qFrom <> qEnd
+    currentIndex = Row.Read(queue, qFrom)
+    qFrom = Math.Remainder(qFrom + 1, qSize)
+    unzip(currentIndex, x, y, dir)
+    currentDist = Row.Read(dists, currentIndex)
+    
+    For action = Action_Forward To Action_TurnLeft
+      nextX = x
+      nextY = y
+      nextDir = dir
+      If action = Action_Forward Then
+        If Row.Read(nodes, currentIndex) = Node_Unavailable Then
+          Goto NextAction
+        EndIf
+        nextX = nextX + dx[dir]
+        nextY = nextY + dy[dir]
+      Else
+        nextDir = Math.Remainder(nextDir + action, 4)
+      EndIf
+      
+      zip(nextX, nextY, nextDir, nextIndex)
+      If nextX >= 0 And nextX < Cols And nextY >= 0 And nextY < Rows And (action = Action_Forward Or Row.Read(nodes, nextIndex) = Node_Available) Then
+        nextDist = Row.Read(dists, nextIndex)
+        If nextDist = -1 Then
+          Row.Write(dists, nextIndex, currentDist + 1)
+          Row.Write(revActions, nextIndex, action)
+          Row.Write(prevNodes, nextIndex, currentIndex)
+          Row.Write(queue, qEnd, nextIndex)
+          qEnd = Math.Remainder(qEnd + 1, qSize)
+        EndIf
+        If nextX = toX And nextY = toY Then
+          ' останавливаем работу BFS
+          qFrom = qEnd
+          action = Action_TurnLeft
+        EndIf
+      EndIf
+      
+      NextAction:
+    EndFor
+  EndWhile
+  
+  ' найти последний узел
+  qLast = Math.Remainder(qEnd + qSize - 1, qSize)
+  lastIndex = Row.Read(queue, qLast)
+  toDir = Math.Remainder(lastIndex, 4)
+  dist = Row.Read(dists, lastIndex)
+  numberOfActions = dist
+  If dist > 0 Then
+    ' восстановить путь
+    While dist <> 0
+      dist--
+      actions[dist] = Row.Read(revActions, lastIndex)
+      lastIndex = Row.Read(prevNodes, lastIndex)
+    EndWhile
+  Else
+    numberOfActions = -1
+  EndIf
+  
+  Row.Delete(dists)
+  Row.Delete(revActions)
+  Row.Delete(prevNodes)
+  Row.Delete(queue)
+  FindPathReturn:
+EndFunction
+
+
+private 
+number Node_Available
+number Node_Unavailable
+
+number nodes ' handle для массива узлов (сетка x направления)
+
+Function zip(in number x, in number y, in number dir, out number index)
+  index = x * 4 * Rows + y * 4 + dir
+EndFunction
+
+Function unzip(in number index, out number x, out number y, out number dir)
+  dir = Math.Remainder(index, 4)
+  xy = (index - dir) / 4
+  y = Math.Remainder(xy, Rows)
+  x = (xy - y) / Rows
+EndFunction

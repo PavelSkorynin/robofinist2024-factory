@@ -1,0 +1,83 @@
+folder "prjs" "Robofinist2024"
+
+' Порядок цветов для калибровки
+' Белый - для определения максимума
+' Синий
+' Зелёный
+' Жёлтый
+' Красный
+' Переключение между цветами кнопкой "Вправо"
+
+import "RSCColor1"
+import "RSCLight2"
+import "RSCLight3"
+import "Colors"
+
+Colors.Init()
+RSCLight2.Init()
+RSCLight3.Init()
+
+r = 0
+g = 0
+b = 0
+colorCalib = 1
+h = 0
+s = 0
+v = 0
+color = 0
+
+While 0=0
+  RSCLight2.GetRawValue(l2)
+  RSCLight3.GetRawValue(l3)
+  LCD.Clear()
+  LCD.Write(0, 0, l2)
+  LCD.Write(0, 10, l3)
+  RSCColor1.GetRGB(r, g, b)
+  LCD.Write(0, 30, Math.Round(r))
+  LCD.Write(30, 30, Math.Round(g))
+  LCD.Write(60, 30, Math.Round(b))
+  RSCColor1.GetHSV(h, s, v)
+  LCD.Write(0, 40, Math.Round(h))
+  LCD.Write(30, 40, Math.Round(s))
+  LCD.Write(60, 40, Math.Round(v))
+  RSCColor1.GetRawValue(r, g, b)
+  LCD.Write(0, 20, Math.Round(r))
+  LCD.Write(30, 20, Math.Round(g))
+  LCD.Write(60, 20, Math.Round(b))
+  LCD.Write(0, 50, colorCalib)  
+  If colorCalib >= 2 And colorCalib <= 5 Then
+    Colors.ToString(colorCalib, colorName)
+    LCD.Write(0, 60, colorName)  
+  Else
+    Colors.ToString(color, colorName)
+    LCD.Write(0, 60, colorName)  
+  EndIf
+  Colors.ReadColor(100, color)
+  If Buttons.GetClicks() = "R" Then
+    If colorCalib = 1 Then
+      RSCColor1.MaxR = r
+      RSCColor1.MaxG = g
+      RSCColor1.MaxB = b
+      colorCalib += 1
+      Colors.ToString(colorCalib, colorName)
+      Speaker.Play(100, colorName)
+    ElseIf colorCalib >= 2 And colorCalib < 5 Then
+      colors[colorCalib] = h
+      colorCalib += 1
+    Else
+      hFile = EV3File.OpenWrite("color.dat")
+      EV3File.WriteLine(hFile, RSCColor1.MaxR)
+      EV3File.WriteLine(hFile, RSCColor1.MaxG)
+      EV3File.WriteLine(hFile, RSCColor1.MaxB)
+      For i = 2 To 4
+        EV3File.WriteLine(hFile, colors[i])
+      EndFor
+      EV3File.WriteLine(hFile, h)
+      EV3File.Close(hFile)
+      colorCalib = 1
+      Speaker.Tone(100, 300, 200)
+    EndIf
+  EndIf
+  
+EndWhile
+  

@@ -1,0 +1,77 @@
+import "Lift"
+
+Function LeftAndStop(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "LeftAndStop " + power + " " + finishEncoder)
+  MoveGeneric(power, 1, -1, finishEncoder, 1)
+EndFunction
+
+Function RightAndStop(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "RightAndStop " + power + " " + finishEncoder)
+  MoveGeneric(power, -1, 1, finishEncoder, 1)
+EndFunction
+
+Function ForwardAndStop(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "ForwardAndStop " + power + " " + finishEncoder)
+  MoveGeneric(power, 1, 1, finishEncoder, 1)
+EndFunction
+
+Function BackwardAndStop(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "BackwardAndStop " + power + " " + finishEncoder)
+  MoveGeneric(power, -1, -1, finishEncoder, 1)
+EndFunction
+
+Function Left(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "Left " + power + " " + finishEncoder)
+  MoveGeneric(power, 1, -1, finishEncoder, 0)
+EndFunction
+
+Function Right(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "Right " + power + " " + finishEncoder)
+  MoveGeneric(power, -1, 1, finishEncoder, 0)
+EndFunction
+
+Function Forward(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "Forward " + power + " " + finishEncoder)
+  MoveGeneric(power, 1, 1, finishEncoder, 0)
+EndFunction
+
+Function Backward(in number power, in number finishEncoder)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "Backward " + power + " " + finishEncoder)
+  MoveGeneric(power, -1, -1, finishEncoder, 0)
+EndFunction
+
+Function Stop()
+  RSCMotorA.OffAndBrake()
+  RSCMotorB.OffAndBrake()
+EndFunction
+
+private 
+
+Function MoveGeneric(in number power, in number dirA, in number dirB, in number finishEncoder, in number stop)
+  Motor.StartSync("AB", dirA * power, dirB * power * (-1))
+
+  'RSCMotorA.SetPowerNow(dirA * power)
+  'RSCMotorB.SetPowerNow(dirB * power)
+  
+  RSCMotorA.GetEncoder(encoderA)
+  RSCMotorB.GetEncoder(encoderB)
+  startEncoderA = encoderA
+  startEncoderB = encoderB
+  While (Math.Abs(encoderA - startEncoderA) + Math.Abs(encoderB - startEncoderB)) / 2 < finishEncoder
+    RSCMotorA.GetEncoder(encoderA)
+    RSCMotorB.GetEncoder(encoderB)
+    Lift.Update()
+  EndWhile
+  If stop = 1 Then
+    RSCMotorA.OffAndBrake()
+    RSCMotorB.OffAndBrake()
+  EndIf  
+EndFunction

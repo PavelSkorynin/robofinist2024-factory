@@ -1,0 +1,45 @@
+Function Init()
+  hBuckets = Row.Init(8, 0)
+  prevDistance = 0
+  firstBucketLength = 290
+  firstBucketEncoder = 0
+  prevBucket = 0
+  sumDist = 0
+EndFunction
+
+Function Push(in number encoder, in number distance)
+  bucket = Math.Ceiling((encoder - firstBucketLength) / 305)
+  bucket = Math.Min(bucket, 7)
+  
+  If prevDistance = 0 Then
+    prevDistance = distance
+  EndIf
+
+  If bucket <> prevBucket Then
+    score = sumDist / (encoder - firstBucketEncoder)
+    Row.Write(hBuckets, prevBucket, score)
+    sumDist = Math.Abs(prevDistance - distance)
+    prevBucket = bucket
+    prevDistance = distance
+    firstBucketEncoder = encoder
+  Else    
+    sumDist += Math.Abs(prevDistance - distance)
+    prevDistance = distance
+  EndIf
+EndFunction
+
+Function GetResult(in number encoder, out number[] buckets)
+  buckets[prevBucket] = sumDist / (encoder - firstBucketEncoder)
+  For i = 0 To prevBucket - 1
+    buckets[i] = Row.Read(hBuckets, i)
+  EndFor
+EndFunction
+
+private
+
+number prevBucket
+number firstBucketLength
+number firstBucketEncoder
+number prevDistance
+number sumDist
+number hBuckets

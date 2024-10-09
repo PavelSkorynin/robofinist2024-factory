@@ -1,0 +1,34 @@
+number Min
+number Max
+
+Function Init()
+  Sensor.SetMode(3, 3) ' raw reflected light
+  Min = 0
+  Max = 1024
+EndFunction
+
+Function GetRawValue(out number value)
+  Sensor3.Raw3(_a, value, _b)
+  value -= _a
+EndFunction
+
+Function GetValue(out number value)
+  Sensor3.Raw3(_a, value, _b)
+  ' value = (value - _a - Min) * 100 / (Max - Min)
+  ' масштабируем интересующий диапазон значений на (0, 100)
+  _b = Max - Min
+  value -= _a
+  value -= Min
+  value *= 100
+  value /= _b
+  If value < 0 Then 
+    value = 0
+  ElseIf value > 100 Then 
+    value = 100 
+  EndIf
+EndFunction
+
+private 
+
+number _a
+number _b

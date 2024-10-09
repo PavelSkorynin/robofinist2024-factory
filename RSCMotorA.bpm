@@ -1,0 +1,36 @@
+number direction
+
+Function Init()
+  direction = 1
+  MotorA.Off()
+EndFunction
+
+Function SetDirectPolarity()
+  MotorA.SetDirectPolarity()
+  direction = 1
+EndFunction
+
+Function SetReversPolarity()
+  MotorA.SetReversPolarity()
+  direction = -1
+EndFunction
+
+Function ResetEncoder()
+  MotorA.ResetCount()
+EndFunction
+
+Function GetEncoder(out number encoder)
+  encoder = MotorA.GetTacho() * direction
+EndFunction
+
+Function SetPower(in number power)
+  MotorA.StartPower(power)
+EndFunction
+
+Function Off()
+  MotorA.Off()
+EndFunction
+
+Function OffAndBrake()
+  MotorA.OffAndBrake()
+EndFunction

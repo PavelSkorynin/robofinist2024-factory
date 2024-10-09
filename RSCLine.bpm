@@ -1,0 +1,142 @@
+import "RSCLight2"
+import "RSCLight3"
+import "RSCMotorA"
+import "RSCMotorB"
+import "RSCPD1"
+
+import "Lift"
+
+number power
+number turnPower
+
+Function Init()
+  RSCMotorA.Init()
+  RSCMotorB.Init()
+  RSCLight2.Init()
+  RSCLight3.Init()
+  RSCPD1.Reset()
+  power = 80
+  turnPower = 70
+EndFunction
+
+Function Update()
+  Lift.Update()
+  RSCLight2.GetValue(a2)
+  RSCLight3.GetValue(a3)
+  error = a3 - a2
+  RSCPD1.Update(error, delta)
+  If delta > 0 Then
+    RSCMotorA.SetPower(power)
+    RSCMotorB.SetPower(power - delta * 2 * power / 100)
+  Else
+    RSCMotorA.SetPower(power + delta * 2 * power / 100)
+    RSCMotorB.SetPower(power)
+  EndIf  
+EndFunction
+
+Function MoveBy(in number encoderDist)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "MoveBy " + encoderDist)
+  RSCMotorA.GetEncoder(encoderCurrent)
+  encoderFinish = encoderCurrent + encoderDist
+  While encoderCurrent < encoderFinish
+    Update()
+    RSCMotorA.GetEncoder(encoderCurrent)
+  EndWhile
+EndFunction
+
+Function MoveToCross()
+  'LCD.Clear()
+  'LCD.Write(0, 0, "MoveToCross")
+  ENCODER_MAX = 10000000
+  encoderCrossStart1 = ENCODER_MAX
+  encoderCrossStart2 = ENCODER_MAX
+  RSCMotorA.GetEncoder(encoderCurrent)
+  While encoderCurrent - encoderCrossStart1 < 20 And encoderCurrent - encoderCrossStart2 < 20
+    Update()
+    RSCMotorA.GetEncoder(encoderCurrent)
+    RSCLight2.GetValue(a2)
+    RSCLight3.GetValue(a3)
+    
+    If a2 < 20 Then
+      If encoderCrossStart1 = ENCODER_MAX Then
+        encoderCrossStart1 = encoderCurrent
+      EndIf
+    Else
+      encoderCrossStart1 = ENCODER_MAX
+    EndIf
+    If a3 < 20 Then
+      If encoderCrossStart2 = ENCODER_MAX Then
+        encoderCrossStart2 = encoderCurrent
+      EndIf
+    Else
+      encoderCrossStart2 = ENCODER_MAX
+    EndIf
+  EndWhile  
+EndFunction
+
+Function TurnLeftToLine(in number minDistance, in number stop)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "TurnLeftToLine " + minDistance + " " + stop)
+  RSCMotorA.GetEncoder(encoderCurrent)
+  encoderFinish = encoderCurrent + minDistance
+  Motor.StartSync("AB", turnPower, turnPower)
+  
+  ' Поворачиваемся на минимальный угол, чтобы сойти с текущей линии
+  While encoderCurrent < encoderFinish
+    Lift.Update()
+    RSCMotorA.GetEncoder(encoderCurrent)
+  EndWhile
+  
+  ' Ждём появления линии на левом датчике
+  RSCLight2.GetValue(s2)
+  While s2 > 50
+    Lift.Update()
+    RSCLight2.GetValue(s2)
+  EndWhile
+  
+  If stop = 1 Then
+    Align()
+  EndIf
+EndFunction
+
+Function TurnRightToLine(in number minDistance, in number stop)
+  'LCD.Clear()
+  'LCD.Write(0, 0, "TurnRightToLine " + minDistance + " " + stop)
+  RSCMotorB.GetEncoder(encoderCurrent)
+  encoderFinish = encoderCurrent + minDistance
+  Motor.StartSync("AB", turnPower * (-1), turnPower * (-1))
+
+  ' Поворачиваемся на минимальный угол, чтобы сойти с текущей линии
+  While encoderCurrent < encoderFinish
+    Lift.Update()
+    RSCMotorB.GetEncoder(encoderCurrent)
+  EndWhile
+  
+  ' Ждём появления линии на правом датчике
+  RSCLight3.GetValue(s3)
+  While s3 > 50
+    Lift.Update()
+    RSCLight3.GetValue(s3)
+  EndWhile
+  
+  If stop = 1 Then
+    Align()
+  EndIf
+EndFunction
+
+Function Align()
+  Time.Reset2()
+  RSCLight2.GetValue(s2)
+  RSCLight3.GetValue(s3)
+  While Time.Get2() < 1000 And Math.Abs(s2 - s3) > 5
+    Lift.Update()
+    RSCMotorA.SetPower((s3 - s2) / 2)
+    RSCMotorB.SetPower((s2 - s3) / 2)
+    RSCLight2.GetValue(s2)
+    RSCLight3.GetValue(s3)    
+  EndWhile
+  RSCMotorA.OffAndBrake()
+  RSCMotorB.OffAndBrake()
+  RSCPD1.Reset()
+EndFunction
